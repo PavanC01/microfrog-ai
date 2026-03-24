@@ -1,13 +1,12 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-import requests
+from openai import OpenAI
 import os
 
 app = Flask(__name__, static_folder="static")
 CORS(app)
 
 HF_TOKEN = os.environ.get("HF_TOKEN", "")
-HF_API_URL = "https://router.huggingface.co/hf-inference/models/meta-llama/Meta-Llama-3-70B-Instruct/v1/chat/completions"
 
 SYSTEM_PROMPT = """You are MicroFrog, a highly intelligent, multi-talented AI assistant. You are professional yet warm, concise yet thorough. You can help with writing, coding, analysis, brainstorming, translation, math, and any topic. Always respond helpfully and confidently. Keep responses clear and well-structured."""
 
@@ -25,34 +24,22 @@ def chat():
 
     full_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + messages
 
-    headers = {
-        "Authorization": f"Bearer {HF_TOKEN}",
-        "Content-Type": "application/json"
-    }
-
-    payload = {
-        "model": "meta-llama/Meta-Llama-3-70B-Instruct",
-        "messages": full_messages,
-        "max_tokens": 600,
-        "temperature": 0.7,
-        "top_p": 0.9,
-        "stream": False
-    }
-
     try:
-        response = requests.post(HF_API_URL, headers=headers, json=payload, timeout=60)
-        result = response.json()
+        client = OpenAI(
+            base_url="https://router.huggingface.co/v1",
+            api_key=HF_TOKEN,
+        )
 
-        if result.get("choices"):
-            reply = result["choices"][0]["message"]["content"].strip()
-            return jsonify({"reply": reply})
-        elif result.get("error"):
-            return jsonify({"error": result["error"]}), 500
-        else:
-            return jsonify({"error": "Unexpected response: " + str(result)}), 500
+        completion = client.chat.completions.create(
+            model="meta-llama/Meta-Llama-3-70B-Instruct",
+            messages=full_messages,
+            max_tokens=600,
+            temperature=0.7,
+        )
 
-    except requests.exceptions.Timeout:
-        return jsonify({"error": "Request timed out. Please try again."}), 504
+        reply = completion.choices[0].message.content.strip()
+        return jsonify({"reply": reply})
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
