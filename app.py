@@ -30,7 +30,7 @@ def chat():
     }
 
     payload = {
-        "model": "meta-llama/Meta-Llama-3-70B-Instruct",
+        "model": "meta-llama/Meta-Llama-3-70B-Instruct:novita",
         "messages": full_messages,
         "max_tokens": 600,
         "temperature": 0.7,
@@ -46,7 +46,7 @@ def chat():
         )
 
         print("Status:", response.status_code)
-        print("Response:", response.text)
+        print("Response:", response.text[:500])
 
         result = response.json()
 
