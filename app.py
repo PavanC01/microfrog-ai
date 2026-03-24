@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-from openai import OpenAI
+import requests
 import os
 
 app = Flask(__name__, static_folder="static")
@@ -24,28 +24,46 @@ def chat():
 
     full_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + messages
 
+    headers = {
+        "Authorization": f"Bearer {HF_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "model": "meta-llama/Meta-Llama-3-70B-Instruct",
+        "messages": full_messages,
+        "max_tokens": 600,
+        "temperature": 0.7,
+        "stream": False
+    }
+
     try:
-        client = OpenAI(
-            base_url="https://router.huggingface.co/v1",
-            api_key=HF_TOKEN,
+        response = requests.post(
+            "https://router.huggingface.co/v1/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=60
         )
 
-        completion = client.chat.completions.create(
-            model="meta-llama/Meta-Llama-3-70B-Instruct",
-            messages=full_messages,
-            max_tokens=600,
-            temperature=0.7,
-        )
+        print("Status:", response.status_code)
+        print("Response:", response.text)
 
-        reply = completion.choices[0].message.content.strip()
-        return jsonify({"reply": reply})
+        result = response.json()
+
+        if result.get("choices"):
+            reply = result["choices"][0]["message"]["content"].strip()
+            return jsonify({"reply": reply})
+        elif result.get("error"):
+            return jsonify({"error": str(result["error"])}), 500
+        else:
+            return jsonify({"error": "Unexpected: " + str(result)}), 500
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 @app.route("/health")
 def health():
-    return jsonify({"status": "ok", "model": "Llama-3-70B", "name": "MicroFrog"})
+    return jsonify({"status": "ok", "name": "MicroFrog"})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
