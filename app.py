@@ -7,7 +7,7 @@ app = Flask(__name__, static_folder="static")
 CORS(app)
 
 HF_TOKEN = os.environ.get("HF_TOKEN", "")
-HF_API_URL = "https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-70B-Instruct"
+HF_API_URL = "https://router.huggingface.co/hf-inference/models/meta-llama/Meta-Llama-3-70B-Instruct/v1/chat/completions"
 
 SYSTEM_PROMPT = """You are MicroFrog, a highly intelligent, multi-talented AI assistant. You are professional yet warm, concise yet thorough. You can help with writing, coding, analysis, brainstorming, translation, math, and any topic. Always respond helpfully and confidently. Keep responses clear and well-structured."""
 
@@ -41,26 +41,20 @@ def chat():
     }
 
     payload = {
-        "inputs": prompt,
-        "parameters": {
-            "max_new_tokens": 600,
-            "temperature": 0.7,
-            "top_p": 0.9,
-            "do_sample": True,
-            "return_full_text": False
-        }
+        "model": "meta-llama/Meta-Llama-3-70B-Instruct",
+        "messages": [{"role": m["role"], "content": m["content"]} for m in messages],
+        "max_tokens": 600,
+        "temperature": 0.7
     }
 
     try:
         response = requests.post(HF_API_URL, headers=headers, json=payload, timeout=60)
         result = response.json()
 
-        if isinstance(result, list) and result[0].get("generated_text"):
-            reply = result[0]["generated_text"].strip()
-            # Clean up any trailing tokens
-            import re
-            reply = re.sub(r"<\|.*?\|>", "", reply).strip()
-            return jsonify({"reply": reply})
+        if result.get("choices"):
+        reply = result["choices"][0]["message"]["content"].strip()
+        return jsonify({"reply": reply})
+    
         elif isinstance(result, dict) and result.get("error"):
             return jsonify({"error": result["error"]}), 500
         else:
