@@ -11,16 +11,6 @@ HF_API_URL = "https://router.huggingface.co/hf-inference/models/meta-llama/Meta-
 
 SYSTEM_PROMPT = """You are MicroFrog, a highly intelligent, multi-talented AI assistant. You are professional yet warm, concise yet thorough. You can help with writing, coding, analysis, brainstorming, translation, math, and any topic. Always respond helpfully and confidently. Keep responses clear and well-structured."""
 
-def build_prompt(messages):
-    prompt = "<|begin_of_text|>"
-    prompt += f"<|start_header_id|>system<|end_header_id|>\n\n{SYSTEM_PROMPT}<|eot_id|>"
-    for msg in messages:
-        role = msg.get("role")
-        content = msg.get("content", "")
-        prompt += f"<|start_header_id|>{role}<|end_header_id|>\n\n{content}<|eot_id|>"
-    prompt += "<|start_header_id|>assistant<|end_header_id|>\n\n"
-    return prompt
-
 @app.route("/")
 def index():
     return send_from_directory("static", "index.html")
@@ -33,7 +23,7 @@ def chat():
     if not messages:
         return jsonify({"error": "No messages provided"}), 400
 
-    prompt = build_prompt(messages)
+    full_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + messages
 
     headers = {
         "Authorization": f"Bearer {HF_TOKEN}",
@@ -42,9 +32,11 @@ def chat():
 
     payload = {
         "model": "meta-llama/Meta-Llama-3-70B-Instruct",
-        "messages": [{"role": m["role"], "content": m["content"]} for m in messages],
+        "messages": full_messages,
         "max_tokens": 600,
-        "temperature": 0.7
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "stream": False
     }
 
     try:
@@ -52,16 +44,15 @@ def chat():
         result = response.json()
 
         if result.get("choices"):
-        reply = result["choices"][0]["message"]["content"].strip()
-        return jsonify({"reply": reply})
-    
-        elif isinstance(result, dict) and result.get("error"):
+            reply = result["choices"][0]["message"]["content"].strip()
+            return jsonify({"reply": reply})
+        elif result.get("error"):
             return jsonify({"error": result["error"]}), 500
         else:
-            return jsonify({"error": "Unexpected response from model"}), 500
+            return jsonify({"error": "Unexpected response: " + str(result)}), 500
 
     except requests.exceptions.Timeout:
-        return jsonify({"error": "Request timed out. The model may be loading, please try again."}), 504
+        return jsonify({"error": "Request timed out. Please try again."}), 504
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
